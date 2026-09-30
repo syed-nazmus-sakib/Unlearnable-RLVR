@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Unlearnable, or Unmeasured? On the Reliability of Difficulty Labels in RLVR</title>
+<meta name="description" content="Prompts labeled unlearnable in RLVR do learn, at about one third of the learnable rate, but the set that defines them moves from 74 to 228 prompts when only the aggregation rule changes. We show how to choose the rollout budget a reproducible difficulty label needs. NeurIPS 2026 Workshop.">
+<meta name="keywords" content="RLVR, reinforcement learning with verifiable rewards, GRPO, prompt difficulty, unlearnability, reproducibility, sampling budget, post-training, NeurIPS 2026">
+<meta property="og:title" content="Unlearnable, or Unmeasured? On the Reliability of Difficulty Labels in RLVR">
+<meta property="og:description" content="The same candidate prompts yield a 74-prompt or a 228-prompt “unlearnable” set depending only on how seeds are combined. How many rollouts does a reproducible difficulty label need?">
+<meta property="og:image" content="static/img/figures/aggregation.webp">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="static/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro" rel="stylesheet">
+<link rel="stylesheet" href="static/css/style.css">
+</head>
+<body>
+
+<!-- ============ Header ============ -->
+<section class="header">
+  <div class="container">
+    <h1 class="pub-title">Unlearnable, or Unmeasured? On the Reliability of Difficulty Labels in RLVR</h1>
+    <p class="authors">
+      <span>Chandak Chakma</span>,
+      <a href="https://syed-nazmus-sakib.github.io/">Syed Nazmus Sakib</a>,
+      <span>Nafiul Haque</span>,
+      <a href="https://shifatearman.com/">Shifat E. Arman</a><sup>*</sup>
+    </p>
+    <p class="affil">Department of Robotics and Mechatronics Engineering, University of Dhaka</p>
+    <p class="venue">NeurIPS 2026 Workshop: Transitioning from Pre-Training to Post-Training</p>
+    <p class="note">*Correspondence to <a href="https://shifatearman.com/">Shifat E. Arman</a> (<a href="mailto:shifatearman@du.ac.bd">shifatearman@du.ac.bd</a>).</p>
+
+    <div class="links">
+      <span class="button soon" title="Coming soon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l6 6v14H6zM14 2v6h6"/></svg>Paper <small>(soon)</small></span>
+      <span class="button soon" title="Coming soon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4l14 16M19 4L5 20"/></svg>arXiv <small>(soon)</small></span>
+      <span class="button soon" title="Coming soon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/></svg>Code <small>(soon)</small></span>
+    </div>
+
+    <figure class="teaser">
+      <img src="static/img/figures/aggregation.webp" width="1800" height="598" alt="Bar chart of the size of the unlearnable set after the no_reward exclusion under four constructions of the same 292 sub-threshold candidates: union of no_reward over 5 seeds (published) gives 74, single-seed no_reward gives 147.8 on average (145 to 150), zero correct in 128 gives 181, and intersection of no_reward over 5 seeds gives 228.">
+      <figcaption>The same 292 candidate hard prompts, four ways of building the “unlearnable” set. Changing only <b>how the five training seeds are combined</b> moves the set from <span class="hl">74</span> to <span class="hl">228</span> prompts, while any single seed on its own gives 145–150. The label depends more on the aggregation rule than on which model was trained.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============ Overview ============ -->
+<section class="band">
+  <div class="container narrow">
+    <h2 class="centered">Overview</h2>
+    <p>Reinforcement learning with verifiable rewards (RLVR) is a central tool for improving reasoning in post-training. Recent work reports that some hard prompts stay <b>“unlearnable”</b>: they occasionally produce a correct solution but barely improve during training, which has been linked to low gradient similarity and a possible representation failure. We revisit this phenomenon and ask a prior question: <b>is the set of prompts used to support the claim measured reliably?</b></p>
+    <p>Difficulty labels are estimated from a limited number of sampled responses, and combining them across seeds can change <i>which</i> prompts are selected rather than simply reduce noise.</p>
+    <p>Key findings:</p>
+    <ul>
+      <li><span class="hl">Slow, not static:</span> the prompts labeled unlearnable improve at roughly <b>one third</b> of the learnable rate. The slow-learning effect is real, but literal non-learning is not.</li>
+      <li><span class="hl">The set depends on the rule:</span> the same candidates give <b>74</b> prompts under the published five-seed rule and <b>228</b> under an alternative aggregation. Resampling a <i>single</i> checkpoint reproduces about <b>81%</b> of the apparent cross-seed disagreement.</li>
+      <li><span class="hl">Budgets can be computed:</span> 8–16 rollouts per prompt give only 0.63–0.73 agreement between repeated labels, and 0.90 needs a projected 242. Our sampling-budget model predicted two budgets before they were measured, and both measurements landed inside the frozen intervals.</li>
+      <li><span class="hl">The gradient gap shrinks:</span> hard prompts have fewer correct rollouts to average. Matching that count cuts the easy-to-unlearnable gradient-similarity ratio from <b>2.327×</b> to <b>1.539×</b>, weakening the evidence without eliminating it.</li>
+    </ul>
+    <p>The slow-learning phenomenon survives our reanalysis, but <i>both the prompts used to define it and the evidence used to explain it require more careful measurement</i>.</p>
+  </div>
+</section>
+
+<!-- ============ Body ============ -->
+<section class="body">
+  <div class="container">
+
+    <h2>Motivation</h2>
+    <p>Prompt difficulty has become an operational quantity in RLVR. Methods use a model's empirical success rate to decide which prompts to replay, filter, route, reweight, or give extra training effort, and difficulty is also used to probe the limits of RLVR itself. Most strikingly, Chen et al. (2026) identified hard prompts that occasionally succeed yet barely improve, called them <i>unlearnable</i>, and connected their behavior to lower within-group gradient similarity.</p>
+    <p>All of these uses depend on identifying hard prompts reliably. Difficulty is estimated from sampled responses, so the same prompt can land on either side of a threshold across repeated evaluations even when the model is unchanged. We treat the <b>aggregation rule and the rollout budget as part of the measurement</b>, and ask when a prompt-level trainability label is stable enough to support a scientific claim.</p>
+
+    <h2>Setup</h2>
+    <p>We reproduce the unlearnability study of Chen et al. (2026) and keep its published cohorts, threshold, and verifier.</p>
+    <table class="simple">
+      <thead><tr><th>Component</th><th>Configuration</th></tr></thead>
+      <tbody>
+        <tr><td>Model</td><td>Qwen2.5-0.5B trained with GRPO, <i>G</i> = 8 rollouts per prompt, five independent seeds.</td></tr>
+        <tr><td>Data</td><td>1,023 prompts from MATH; the original answer verifier, unmodified.</td></tr>
+        <tr><td>Cohorts</td><td>The published easy, learnable, and unlearnable groups; difficulty threshold τ = 0.1. <i>D<sub>u</sub></i> denotes the set produced by the published unlearnability construction.</td></tr>
+        <tr><td>Set membership</td><td><i>N</i> = 128 evaluation rollouts per prompt; independent sets compared by Jaccard similarity.</td></tr>
+        <tr><td>Gradients</td><td><i>N</i> = 200 initial-policy rollouts; each prompt-level gradient averages its correct rollouts.</td></tr>
+        <tr><td>Uncertainty</td><td>95% bootstrap intervals, resampling prompts at the level appropriate to each statistic.</td></tr>
+      </tbody>
+    </table>
+    <p>Our run is not a byte-for-byte rerun. The key difference is a 1,024-token generation cap instead of the original 5,120, which we test directly on the evaluation side; the full constant-by-constant audit is <a href="#audit">below</a>.</p>
+
+    <h2>“Unlearnable” Prompts Do Learn, Slowly</h2>
+    <div class="split">
+      <figure>
+        <img src="static/img/figures/slow_learning.webp" width="1080" height="752" loading="lazy" alt="Training reward over 120 optimizer steps for the published cohorts. Easy prompts rise from about 0.15 to 0.62, learnable prompts from about 0.05 to 0.15, and unlearnable prompts from about 0.01 to 0.10: low, but not flat.">
+        <figcaption>Training reward for the published easy, learnable, and unlearnable cohorts. The separation is present; the flatness is not.</figcaption>
+      </figure>
+      <div>
+        <p>The three published groups stay clearly separated throughout training, but the <i>D<sub>u</sub></i> group is not flat. Reward slopes per 100 optimizer steps:</p>
+        <div class="stat-row">
+          <div class="stat"><span class="stat-num">+0.380</span><span class="stat-lbl">easy</span></div>
+          <div class="stat"><span class="stat-num">+0.112</span><span class="stat-lbl">learnable</span></div>
+          <div class="stat"><span class="stat-num">+0.042</span><span class="stat-lbl"><i>D<sub>u</sub></i> [+0.026, +0.059]</span></div>
+        </div>
+        <p>The <i>D<sub>u</sub></i> interval excludes zero: these prompts improve at roughly <b>one third of the learnable rate</b> while staying at a much lower reward level.</p>
+        <p>We use the slope, not the terminal reward, because GRPO drops a prompt from the update once its sampled rewards have zero variance, so the prompts still active late in training are not the same prompts as early on. Throughout, “unlearnable” refers to the published label, not to a claim that these prompts cannot improve.</p>
+      </div>
+    </div>
+
+    <h2>The Aggregation Rule Changes the Set</h2>
+    <p>To separate training variation from the aggregation rule, we fix a common candidate pool: evaluating all 1,023 prompts 128 times on one reference checkpoint leaves <b>292</b> prompts at or below τ = 0.1. From these same candidates:</p>
+    <ul>
+      <li>the <b>published rule</b>, which drops a prompt marked <code>no_reward</code> in <i>any</i> of the five runs, keeps <b>74</b>;</li>
+      <li>dropping a prompt only if it is <code>no_reward</code> in <i>all</i> five runs keeps <b>228</b>;</li>
+      <li>each training seed on its own keeps <b>145–150</b> (mean 147.8);</li>
+      <li>requiring zero correct responses in the 128-response evaluation keeps <b>181</b>.</li>
+    </ul>
+    <figure>
+      <img src="static/img/figures/set_construction.webp" width="1800" height="639" loading="lazy" alt="Three panels. Left: set size falls as more seeds are intersected, from about 170 to 41 for unlearnable and 190 to 122 for learnable. Middle: many prompts are flagged by only one to four of five seeds. Right: prompts flagged by fewer seeds cluster just above the threshold tau = 0.1.">
+      <figcaption>Left: set size keeps falling as more seeds are combined instead of settling. Middle: many prompts are flagged by only some seeds. Right: that disagreement is concentrated near τ = 0.1, where one extra success moves a prompt across the threshold.</figcaption>
+    </figure>
+    <p><b>What fails is the estimator, not the target.</b> For a fixed policy with true success probability <i>p</i>(<i>x</i>), the set <i>D</i><sub>τ</sub> = {<i>x</i> : <i>p</i>(<i>x</i>) ≤ τ} is well defined. But requiring a prompt to be labeled difficult in <i>every</i> independent run means that, as runs are added, only prompts almost guaranteed that label survive, pushing the retained set toward <i>p</i>(<i>x</i>) = 0. The <code>no_reward</code> exclusion then removes exactly those prompts. The procedure does not converge to <i>D</i><sub>τ</sub>; it converges to a degenerate outcome of the aggregation rule. Pooling the same rollouts into one deeper estimate avoids this.</p>
+    <p class="callout">“No reward was observed in training” is not the same as “unsolvable”: of the 218 prompts removed by the <code>no_reward</code> criterion, <b>116</b> are solved at least once in a later <i>N</i> = 128 evaluation.</p>
+
+    <h2>Most of the Disagreement Is Evaluation Noise</h2>
+    <p>To remove training variation entirely, we evaluate the <b>same checkpoint twice</b>, changing only the sampled rollouts. At <i>N</i> = 32 the two evaluations agree at Jaccard 0.798, versus 0.751 across independently trained seeds: resampling one fixed model reproduces about <b>81% of the apparent cross-seed disagreement</b>. A binomial model of the threshold decision predicts the same-model agreement to within 0.004.</p>
+    <p>A longer generation cap does not explain the movement either. Re-evaluating all prompts with 5,120 instead of 1,024 tokens cuts truncation from 9.6% to 3.2%, yet the two sets agree at 0.898, no less than two passes at the same cap (0.877).</p>
+    <p class="caption"><b>Table</b>: Key robustness controls.</p>
+    <div class="table-scroll">
+<!-- @build:controls -->
+<table class="data wrap"><thead><tr><th><b>Control</b></th><th><b>Comparison</b></th><th><b>Result</b></th><th><b>Interpretation</b></th></tr></thead><tbody><tr><td>Same-model resampling</td><td>fixed checkpoint vs. cross-seed, <i>N</i>&nbsp;=&nbsp;32</td><td>0.798 vs. 0.751</td><td>Most apparent cross-seed disagreement can arise from evaluation sampling alone.</td></tr><tr><td>Token-cap sensitivity</td><td>1,024 vs. 5,120 tokens</td><td>0.898 Jaccard</td><td>Set movement is no larger than the measured repeatability scale.</td></tr><tr><td>Equal-cost allocation</td><td>one <i>N</i>&nbsp;=&nbsp;128 pass vs. 4×32</td><td>0.877 vs. 0.791</td><td>A deeper estimate is more reproducible at the same rollout cost.</td></tr></tbody></table>
+<!-- /@build:controls -->
+    </div>
+
+    <h2>How Many Rollouts Does a Difficulty Label Need?</h2>
+    <p><b>Spend the budget deeply, not in shallow passes.</b> With the same 128 rollouts per prompt, one deep estimate thresholded once agrees across repeats at Jaccard <b>0.877</b>, while four blocks of 32 intersected agree at only <b>0.791</b> (difference +0.086 [+0.038, +0.135]). Both rules use the same effective threshold, ⌊0.1 × 128⌋/128 = ⌊0.1 × 32⌋/32 = 0.09375, so the gain comes from allocation, not from extra compute.</p>
+    <p><b>Predicting reproducibility.</b> With <i>N</i> rollouts, a prompt with success probability <i>p</i> is flagged with probability <i>q<sub>N</sub></i>(<i>p</i>) = Pr(<i>K</i> ≤ ⌊τ<i>N</i>⌋), where <i>K</i> ~ Binomial(<i>N</i>, <i>p</i>). We estimate the distribution <i>F</i> of latent success probabilities from the pooled <i>N</i> = 128 evaluation with the Kiefer–Wolfowitz nonparametric MLE, which accounts for the noise in observed pass rates, and predict the agreement of two independent evaluations:</p>
+    <div class="formula"><i>J<sub>N</sub></i> = ∫ <i>q<sub>N</sub></i>(<i>p</i>)<sup>2</sup> d<i>F</i>(<i>p</i>) &nbsp;/&nbsp; ∫ [2<i>q<sub>N</sub></i>(<i>p</i>) − <i>q<sub>N</sub></i>(<i>p</i>)<sup>2</sup>] d<i>F</i>(<i>p</i>)</div>
+    <div class="split">
+      <figure>
+        <img src="static/img/figures/budget_curve.webp" width="1571" height="1250" loading="lazy" alt="Top: predicted Jaccard between two independent passes rises with per-prompt budget N, in a sawtooth, from about 0.63 at N=8 to about 0.88 at N=160; the shallow four-block rule sits below it. Bottom: the effective threshold floor(tau N)/N saws between about 0.05 and 0.10.">
+        <figcaption>Predicted agreement versus per-prompt budget <i>N</i>. The sawtooth comes from the integer threshold (bottom), so we report the first budget from which a target <i>stays</i> satisfied.</figcaption>
+      </figure>
+      <div>
+        <p>For Qwen2.5-0.5B on MATH at τ = 0.1:</p>
+        <div class="stat-row stat-col">
+          <div class="stat"><span class="stat-num">≈ 40</span><span class="stat-lbl">rollouts for 0.80 agreement</span></div>
+          <div class="stat"><span class="stat-num">242</span><span class="stat-lbl">projected for 0.90</span></div>
+          <div class="stat"><span class="stat-num">2,111</span><span class="stat-lbl">projected for 0.95</span></div>
+        </div>
+        <p>The 0.90 and 0.95 budgets lie beyond the <i>N</i> = 128 fitting range. These numbers depend on how many prompts sit near the threshold, so they do not transfer to other models, datasets, or thresholds. <b>What transfers is the procedure for computing them.</b></p>
+      </div>
+    </div>
+    <p class="caption"><b>Table</b>: Predicted Jaccard agreement at representative budgets (deep, single-pass rule).</p>
+    <div class="table-scroll">
+<!-- @build:budget -->
+<table class="data budget"><thead><tr><th><i>N</i> rollouts per prompt</th><th>8</th><th>16</th><th>32</th><th>64</th><th>128</th><th>256</th><th>512</th></tr></thead><tbody><tr><td>Predicted Jaccard</td><td class="heat" style="--a:0.06">0.6322</td><td class="heat" style="--a:0.25">0.7265</td><td class="heat" style="--a:0.40">0.7998</td><td class="heat" style="--a:0.48">0.8413</td><td class="heat" style="--a:0.55">0.8759</td><td class="heat" style="--a:0.60">0.9022</td><td class="heat" style="--a:0.63">0.9171</td></tr></tbody></table>
+<!-- /@build:budget -->
+    </div>
+
+    <h2>The Budget Model Predicts Unmeasured Budgets</h2>
+    <div class="split">
+      <figure>
+        <img src="static/img/figures/predicted_measured.webp" width="1516" height="1652" loading="lazy" alt="Predicted versus measured Jaccard. Points lie close to the y = x line within a ±0.03 band: three retrospective Qwen 0.5B points, three cross-model consistency points, and two red diamonds for the prospectively frozen predictions, which sit slightly above the line.">
+        <figcaption>Predicted versus measured agreement. Filled diamonds are the two prospectively frozen predictions; the Qwen2.5-1.5B point is excluded from validation.</figcaption>
+      </figure>
+      <div>
+        <p>We froze and timestamped predictions for two budgets that had not yet been measured, then generated 212,784 new responses:</p>
+        <div class="table-scroll">
+        <table class="data compact">
+          <thead><tr><th>Budget</th><th>Frozen prediction</th><th>Measured</th></tr></thead>
+          <tbody>
+            <tr><td><i>N</i> = 40</td><td>0.8131 [0.7699, 0.8533]</td><td><b>0.8450</b> [0.8063, 0.8833]</td></tr>
+            <tr><td><i>N</i> = 64</td><td>0.8397 [0.7980, 0.8792]</td><td><b>0.8742</b> [0.8369, 0.9091]</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <p>Both measurements fall inside their frozen intervals. The model underpredicts by about 0.03 in both cases, which is conservative: it recommends slightly more sampling, not less.</p>
+        <p>Set size alone is not enough. A null model that gives every prompt the same success probability matches the number of flagged prompts by construction but misses the measured Jaccard by 0.19–0.53, while the distributional model misses by only 0.008–0.032. What matters is <b>how prompt probabilities are spread around the threshold</b>.</p>
+      </div>
+    </div>
+    <p class="caption"><b>Table</b>: Retrospective and cross-model consistency checks. Cross-model rows reuse the pass their distribution was estimated from, so they are consistency checks rather than independent validation; the Qwen2.5-1.5B row (greyed) is an excluded diagnostic.</p>
+    <div class="table-scroll">
+<!-- @build:retrospective -->
+<table class="data"><thead><tr><th><b>Model / rule</b></th><th><b>Measured</b></th><th><b>Predicted</b></th><th><b>Error</b></th></tr></thead><tbody><tr><td>Qwen2.5-0.5B, one pass <i>N</i>&nbsp;=&nbsp;32</td><td>0.7977</td><td>0.8000</td><td>+0.0023</td></tr><tr><td>Qwen2.5-0.5B, one pass <i>N</i>&nbsp;=&nbsp;128</td><td>0.8770</td><td>0.8759</td><td>−0.0011</td></tr><tr><td>Qwen2.5-0.5B, four blocks of 32</td><td>0.7906</td><td>0.8228</td><td>+0.0322</td></tr><tr><td>Qwen2.5-0.5B, two blocks of 16</td><td>0.7028</td><td>0.7248</td><td>+0.0220</td></tr><tr><td>Llama-3.2-3B, two blocks of 16</td><td>0.6844</td><td>0.6763</td><td>−0.0081</td></tr><tr><td>Llama-3.2-3B v2, two blocks of 16</td><td>0.7070</td><td>0.6926</td><td>−0.0144</td></tr><tr class="excluded"><td>Qwen2.5-1.5B, two blocks of 16</td><td>0.6849</td><td>0.6718</td><td>−0.0131</td></tr></tbody></table>
+<!-- /@build:retrospective -->
+    </div>
+
+    <h2>The Gradient Gap Shrinks When Sample Count Is Matched</h2>
+    <figure>
+      <img src="static/img/figures/matched_gradient.webp" width="1800" height="695" loading="lazy" alt="Left: within-group mean gradient cosine rises with the number K of correct rollouts averaged, for D_u, learnable and easy prompts. Right: the easy-to-D_u similarity ratio is about 1.4 to 1.6 at matched K = 4, 6, 8 and 11, compared with 2.33 unmatched; every matched value stays above 1.">
+    </figure>
+    <p>The gradient explanation compares how similar per-prompt gradients are within each group, but each prompt-level gradient averages its <i>correct</i> rollouts, and hard prompts have far fewer: in the <i>N</i> = 200 cohort, a median of <b>8</b> for <i>D<sub>u</sub></i> versus <b>65</b> for easy prompts.</p>
+    <div class="stat-row">
+      <div class="stat"><span class="stat-num">2.327×</span><span class="stat-lbl">easy / <i>D<sub>u</sub></i> ratio, unmatched</span></div>
+      <div class="stat"><span class="stat-num">1.539×</span><span class="stat-lbl">matched at <i>K</i> = 11 [1.26, 1.88]</span></div>
+      <div class="stat"><span class="stat-num">48.9%</span><span class="stat-lbl">of the log-gap removed [29.3, 71.2]</span></div>
+    </div>
+    <p>Every matched level (<i>K</i> = 4, 6, 8, 11) lies below the unmatched ratio and above one, so matching <b>weakens the separation substantially without eliminating it</b>. Matching also selects: at <i>K</i> = 11 only 28 of the 71 <i>D<sub>u</sub></i> prompts remain, and they are the easier ones, so this shows sensitivity to sample count, not a corrected full-cohort estimate.</p>
+    <figure class="half">
+      <img src="static/img/figures/propagation.webp" width="1357" height="958" loading="lazy" alt="Width of the 95% interval that set-membership uncertainty adds to the gradient-similarity ratio, falling with per-prompt budget N from about 0.41 at N = 8 to about 0.12 at N = 200, crossing a 0.25 materiality threshold around N = 32.">
+      <figcaption>Set uncertainty propagates downstream: at <i>N</i> = 8 it alone adds a 95% interval width of 0.41 to the gradient ratio, falling to 0.14 by <i>N</i> = 128.</figcaption>
+    </figure>
+
+    <h2>Two Simple Optimization Explanations Do Not Hold</h2>
+    <div class="two-col">
+      <div>
+        <p><b>Exposure starvation.</b> With <i>G</i> = 8, a prompt only updates the policy when its sampled rewards differ. <i>D<sub>u</sub></i> prompts contribute on 2.14 steps per run, versus 3.13 for learnable and 5.26 for easy prompts. The gap is real, but none of the 156 prompts in the exposure cohort is fully starved across all five runs, and <b>22.4%</b> receive at least the learnable group's mean exposure while still improving slowly.</p>
+      </div>
+      <div>
+        <p><b>GRPO normalization.</b> If reward-std normalization suppressed hard prompts, <i>D<sub>u</sub></i> updates would be smaller. The opposite holds: when a prompt does contribute, the mean 1/σ scale is <b>2.836</b> for <i>D<sub>u</sub></i> and 2.426 for easy prompts, about 17% larger. The asymmetry is in how often an update forms, not in its scale.</p>
+      </div>
+    </div>
+    <p><i>Content starvation</i>, where rewarded trajectories carry weak learning signal, remains possible; we cannot test it because the training-time responses were not stored. The cause of the slow-learning effect is still unresolved.</p>
+
+    <h2>An Unstable Label Does Not Necessarily Mean Unstable Training</h2>
+    <p>Does a noisy difficulty rule make difficulty-aware RLVR ineffective? We train five seeds under two neighboring constructions that remove very different amounts of usable training signal, <b>5.0%</b> versus <b>27.6%</b> after GRPO's zero-variance filter, alongside size-matched random-removal controls. The resulting models differ by <b>less than one held-out accuracy point</b>. The experiment cannot resolve effects that small, so this is not evidence of equivalence, but it bounds our claim: a large change in the reported set need not produce an equally large change in training. Our conclusion is about <i>measurement and inference</i>, not a claim that every method using noisy difficulty signals must fail.</p>
+
+    <h2 id="audit">Replication Audit</h2>
+    <p>We audited the effective configuration from the actual training and evaluation paths: of 47 effective constants, 30 match the original and the 17 below differ. The generation cap matters most, since it affects hard prompts more than easy ones; its evaluation-side effect is tested above, but our training-dependent magnitudes should not be read as an exact reproduction of the original configuration. All runs used a single NVIDIA RTX 3090 Ti (24 GB).</p>
+    <div class="table-scroll">
+<!-- @build:config-audit -->
+<table class="data wrap"><thead><tr><th><b>Configuration constant</b></th><th><b>Ours</b></th><th><b>Original</b></th></tr></thead><tbody><tr class="section"><td colspan="3"><b>Training</b></td></tr><tr><td>Dataset name</td><td><code>simplelr_qwen_level1to4_sub1k</code></td><td><code>simplelr_qwen_level1to4</code></td></tr><tr><td>Maximum response length</td><td>1,024</td><td>5,120</td></tr><tr><td>Train batch size</td><td>32</td><td>256</td></tr><tr><td>PPO mini-batch size</td><td>16</td><td>64</td></tr><tr><td>PPO micro-batch size</td><td>2</td><td>32</td></tr><tr><td>Log-probability micro-batch size</td><td>4</td><td>128</td></tr><tr><td>Micro rollout batch size</td><td>128</td><td>1,024</td></tr><tr><td>Tensor parallelism</td><td>1</td><td>2</td></tr><tr><td>GPUs per node</td><td>1</td><td>4</td></tr><tr><td>Rollout GPU memory utilization</td><td>0.45</td><td>0.75</td></tr><tr><td>Total epochs</td><td>12</td><td>50</td></tr><tr><td>Save frequency</td><td>40</td><td>20</td></tr><tr><td>Test frequency</td><td>100,000</td><td>5</td></tr><tr><td>Validation batch size</td><td>200</td><td>1,000</td></tr><tr class="section"><td colspan="3"><b>Evaluation</b></td></tr><tr><td>Test data</td><td>Training subset used here</td><td>Original test split</td></tr><tr><td>Maximum generation length</td><td>1,024</td><td>5,120</td></tr><tr><td>GPU memory utilization</td><td>0.60</td><td>0.75</td></tr></tbody></table>
+<!-- /@build:config-audit -->
+    </div>
+  </div>
+</section>
+
+<!-- ============ Conclusion ============ -->
+<section class="band">
+  <div class="container narrow">
+    <h2 class="centered">Conclusion</h2>
+    <p>We revisited the unlearnability phenomenon in RLVR and found a more nuanced result. The affected prompts improve at roughly one third of the learnable rate rather than not at all, but the prompts used to define them are far less stable than the effect itself. The published aggregation rule does not consistently recover a fixed-threshold set, and finite-sample evaluation explains much of the apparent disagreement across training seeds.</p>
+    <p>We provide a way to determine how much evaluation reproducible difficulty assignment requires, and validate its predictions at previously unmeasured budgets. The gradient-similarity difference proposed to explain unlearnability shrinks substantially when estimator sample count is matched, although a residual gap remains. The lesson is not that unlearnability disappears, but that <i>low-budget difficulty labels are unreliable for classifying individual prompts as “unlearnable,” or for supporting mechanistic claims built on that classification</i>.</p>
+  </div>
+</section>
+
+<!-- ============ BibTeX ============ -->
+<section class="body" id="bibtex">
+  <div class="container">
+    <h2>BibTeX</h2>
+<pre><code>@inproceedings{chakma2026unlearnable,
+    title={Unlearnable, or Unmeasured? On the Reliability of Difficulty Labels in RLVR},
+    author={Chakma, Chandak and Sakib, Syed Nazmus and Haque, Nafiul and
+            Arman, Shifat E.},
+    booktitle={NeurIPS 2026 Workshop: Transitioning from Pre-Training to Post-Training},
+    year={2026}
+}</code></pre>
+  </div>
+</section>
+
+<!-- ============ Footer ============ -->
+<footer class="footer">
+  <div class="container narrow">
+    <p>This page was built using the <a href="https://github.com/eliahuhorwitz/Academic-project-page-template">Academic Project Page Template</a>. This website is licensed under a <a rel="license" href="https://creativecommons.org/licenses/by-sa/4.0/">Creative Commons Attribution-ShareAlike 4.0 International License</a>.</p>
+  </div>
+</footer>
+
+</body>
+</html>
