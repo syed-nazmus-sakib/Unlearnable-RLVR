@@ -1,0 +1,233 @@
+diff --git a/gradient_analysis/checkpoint_gradient_analysis.py b/gradient_analysis/checkpoint_gradient_analysis.py
+index 834efd9..f6c0e88 100644
+--- a/gradient_analysis/checkpoint_gradient_analysis.py
++++ b/gradient_analysis/checkpoint_gradient_analysis.py
+@@ -262,6 +262,14 @@ class CheckpointGradientAnalyzer:
+             
+         return padded, attention_mask
+     
++    def _record_skip(self, rollout, question_id):
++        """A53.9: a skipped sequence is WRITTEN DOWN, never silently dropped."""
++        import json as _json
++        with open(self.skip_log, "a") as f:
++            f.write(_json.dumps({"question_id": question_id,
++                                 "tokens": len(rollout["input_ids"]),
++                                 "label": rollout.get("label")}) + "\n")
++
+     def create_optimized_batches(self, rollouts: List[Dict], batch_size: int) -> List[List[Dict]]:
+         """
+         Create batches optimized for similar sequence lengths to minimize padding.
+@@ -275,11 +283,41 @@ class CheckpointGradientAnalyzer:
+         """
+         # Sort rollouts by sequence length to group similar lengths together
+         sorted_rollouts = sorted(rollouts, key=lambda x: len(x['input_ids']))
+-        
++
++        # A53.9 LENGTH-AWARE BATCHING, registered before it was written:
++        #   batch `batch_size` below `length_split` tokens, batch ONE at or
++        #   above it. At 5120 tokens one sequence's full-vocabulary logits are
++        #   5120 * |V| * 4 bytes, so a batch of four OOMs a 24 GB card by
++        #   arithmetic, not by bad luck. Default None -> historical behaviour.
++        length_split = getattr(self, "length_split", None)
++        if length_split is not None:
++            batches, short = [], []
++            for r in sorted_rollouts:
++                if len(r['input_ids']) >= length_split:
++                    batches.append([r])                 # long: strictly alone
++                else:
++                    short.append(r)
++                    if len(short) >= batch_size:
++                        batches.append(short); short = []
++            if short:
++                batches.append(short)
++            return batches
++
+         batches = []
+         current_batch = []
++        max_batch_tokens = getattr(self, "max_batch_tokens", None)
+         
+         for rollout in sorted_rollouts:
++            # A53 execution-only safety: keep the estimator and examples fixed,
++            # but do not pad four 5120-token examples into one batch.  The
++            # default is None, so every historical invocation is unchanged.
++            if (current_batch and max_batch_tokens is not None and
++                    (len(current_batch) + 1) * max(
++                        len(rollout['input_ids']),
++                        max(len(x['input_ids']) for x in current_batch),
++                    ) > max_batch_tokens):
++                batches.append(current_batch)
++                current_batch = []
+             current_batch.append(rollout)
+             
+             # If batch is full or adding another would create too much padding, finalize it
+@@ -907,6 +945,15 @@ class CheckpointGradientAnalyzer:
+                 self.prompt_incorrect_avg_gradients_normalized[question_id][param_name] /= self.prompt_incorrect_total[question_id]
+     
+     def avg_gradients_squared(self):
++        # A59: an invocation with no work left is NORMAL COMPLETION, not an
++        # error. The chunked runner deliberately calls this once more than
++        # there is work for, to learn that it is finished; dividing by a zero
++        # total turned that terminal call into rc=1 and made every completed
++        # cell report as failed.
++        if not self.all_total:
++            print("avg_gradients_squared: nothing processed in this invocation; "
++                  "treating as completion")
++            return
+         self.all_avg_gradients_squared /= self.all_total
+         for question_id in self.prompt_avg_gradients_squared.keys():
+             self.prompt_avg_gradients_squared[question_id] /= self.prompt_total[question_id]
+@@ -1029,15 +1076,38 @@ class CheckpointGradientAnalyzer:
+             
+             # Process each batch
+             for batch_rollouts in batches:
+-                
+-                # try:
+-                # Compute gradients for the batch
+-                if args.simplified:
+-                    batch_gradients = self.compute_gradients_batch_simplified(batch_rollouts, top_entropy_token)
+-                elif args.mle:
+-                    batch_gradients = self.compute_mle_gradients_batch(batch_rollouts)
++
++                def _compute(items):
++                    if args.simplified:
++                        return self.compute_gradients_batch_simplified(items, top_entropy_token)
++                    elif args.mle:
++                        return self.compute_mle_gradients_batch(items)
++                    return self.compute_gradients_batch(items, top_entropy_token)
++
++                # A53.9 OOM policy, fixed in advance: re-batch to singletons,
++                # then SKIP AND RECORD. Never retry by truncating the input --
++                # truncation would change the estimator under audit.
++                if getattr(self, "skip_log", None) is None:
++                    batch_gradients = _compute(batch_rollouts)
+                 else:
+-                    batch_gradients = self.compute_gradients_batch(batch_rollouts, top_entropy_token)
++                    try:
++                        batch_gradients = _compute(batch_rollouts)
++                    except torch.cuda.OutOfMemoryError:
++                        torch.cuda.empty_cache()
++                        if len(batch_rollouts) > 1:
++                            singles, kept = [], []
++                            for one in batch_rollouts:
++                                try:
++                                    singles.append(_compute([one])[0]); kept.append(one)
++                                except torch.cuda.OutOfMemoryError:
++                                    torch.cuda.empty_cache()
++                                    self._record_skip(one, question_id)
++                            batch_rollouts, batch_gradients = kept, singles
++                        else:
++                            self._record_skip(batch_rollouts[0], question_id)
++                            continue
++                    if not batch_rollouts:
++                        continue
+                 
+                 # Update running averages for each rollout in the batch
+                 for j, rollout in enumerate(batch_rollouts):
+@@ -1210,6 +1280,12 @@ def main():
+                        help="Device to use (cuda/cpu/auto)")
+     parser.add_argument("--batch_size", type=int, default=None,
+                        help="Batch size for gradient computation (auto-detect if not specified)")
++    parser.add_argument("--length_split", type=int, default=None,
++                        help="A53.9: sequences at or above this many tokens are batched ALONE; default None = historical behaviour")
++    parser.add_argument("--skip_log", type=str, default=None,
++                        help="A53.9: JSONL path recording any sequence skipped after an OOM at batch size 1")
++    parser.add_argument("--max_batch_tokens", type=int, default=None,
++                       help="Optional padded-token ceiling per batch; default preserves historical batching")
+     parser.add_argument("--max_memory_gb", type=float, default=140.0,
+                        help="Maximum GPU memory to use in GB (for auto batch size detection)")
+     parser.add_argument("--top_entropy_token", action="store_true",help="only get gradient for topentropy tokens in one rollout")
+@@ -1253,6 +1329,9 @@ def main():
+         prompt_type=args.prompt_type,
+     )
+     analyzer.batch_size = args.batch_size  # Set batch size
++    analyzer.max_batch_tokens = args.max_batch_tokens
++    analyzer.length_split = args.length_split
++    analyzer.skip_log = args.skip_log
+     analyzer.max_memory_gb = args.max_memory_gb  # Set memory limit
+     analyzer.setup_before_analysis()
+     
+diff --git a/inference/config.py b/inference/config.py
+index 6935c25..15964bc 100644
+--- a/inference/config.py
++++ b/inference/config.py
+@@ -161,4 +161,10 @@ config.prompt.custom_templates["math"] = """Solve the following math problem by
+ config.prompt.custom_templates["reasoning"] = """You are a helpful AI Assistant that provides well-reasoned and detailed responses. You first verbalize your reasoning process in the form of an internal monologue and then provide the user with the final answer in $\\boxed{{ANSWER}}$, where ANSWER is just the final number or expression that solves the problem:\n{question}"""
+ config.prompt.custom_templates["qwen"] = """{question}\nPlease reason step by step, and put your final answer within \\boxed{{}}."""
+ config.prompt.custom_templates["simplerl_base"] = """Question:\n{question}\nAnswer:\nLet's think step by step."""
+-config.prompt.custom_templates["octo"] = """Question: {question}\nAnswer:"""
+\ No newline at end of file
++config.prompt.custom_templates["octo"] = """Question: {question}\nAnswer:"""
++# --- E4 / A39.3 attempt 2 -------------------------------------------------
++# Llama-3.2-3B-Instruct fails answer extraction on 25.26 % of rollouts under the
++# "qwen" template, correlated with pass rate at -0.464. This template revises the
++# OUTPUT INSTRUCTION only. It is a NEW key: "qwen" is left byte-identical so
++# every stored 0.5B result and any future 0.5B run is unaffected.
++config.prompt.custom_templates["e4v2"] = """{question}\nSolve the problem. Keep your reasoning brief. End your response with the final answer in the form \\boxed{{answer}} -- exactly one \\boxed{{}}, containing only the final answer, with nothing after it."""
+diff --git a/inference/evaluate_model.py b/inference/evaluate_model.py
+index f0b2edb..641bbb7 100644
+--- a/inference/evaluate_model.py
++++ b/inference/evaluate_model.py
+@@ -373,7 +373,7 @@ def main():
+                 print(f"Loading model from {model_path}")
+                 if args.use_sglang:
+                     from gen_utils_sglang import ResponseGenerator as ResponseGeneratorSGLang
+-                    generator = ResponseGeneratorSGLang(model_path, args.tokenizer_path or model_path)
++                    generator = ResponseGeneratorSGLang(model_path, args.tokenizer_path or model_path, gpu_memory_util=args.gpu_memory_util)
+                 else:
+                     from gen_utils import ResponseGenerator
+                     generator = ResponseGenerator(model_path, args.tokenizer_path or model_path, gpu_memory_util=args.gpu_memory_util, lora_dir=args.lora)
+diff --git a/inference/gen_utils_sglang.py b/inference/gen_utils_sglang.py
+index ad188b5..941af53 100644
+--- a/inference/gen_utils_sglang.py
++++ b/inference/gen_utils_sglang.py
+@@ -47,24 +47,41 @@ def update_config_from_args():
+     return args
+ 
+ class ResponseGenerator:
+-    def __init__(self, model_name: str = None, tokenizer_name: str = None):
++    def __init__(self, model_name: str = None, tokenizer_name: str = None,
++                 gpu_memory_util: float = None):
+         """Initialize the response generator with a specific model."""
+-        self.model_name = model_name 
++        self.model_name = model_name
+         print("ResponseGenerator: model_name: ", self.model_name)
++        # Size dispatch is a substring match on the path, so compare case-insensitively:
++        # RL checkpoint dirs are lowercase (e.g. qwen_0.5b_baseline_seed1/global_step_120/
++        # actor/huggingface) and would otherwise fall through to "Unsupported model".
++        size_tag = self.model_name.upper()
++        # gpu_memory_util maps to sglang's mem_fraction_static; without it sglang uses
++        # its own default (~0.9), which OOMs on a 24GB card at large --num-samples.
++        engine_kwargs = {}
++        if gpu_memory_util is not None:
++            engine_kwargs["mem_fraction_static"] = gpu_memory_util
++        # generate_responses() submits 5000 prompts per call, so sglang is free to form
++        # very large decode batches. The logits tensor is batch x vocab (151936 for Qwen2.5),
++        # i.e. ~0.6MB fp32 per running sequence, which OOMs a 24GB card well before the
++        # KV pool does. Cap concurrency on small GPUs; unset = sglang's own default.
++        max_running = os.environ.get("SGLANG_MAX_RUNNING_REQUESTS")
++        if max_running:
++            engine_kwargs["max_running_requests"] = int(max_running)
+         # or config.model.base_model
+         # self.llm = LLM(model=self.model_name, tokenizer=tokenizer_name, dtype=torch.float16, tensor_parallel_size=torch.cuda.device_count())
+-        if "1.5B" in self.model_name or "0.5B" in self.model_name or "3B" in self.model_name:
+-            self.llm = sgl.Engine(model_path=self.model_name, tokenizer_path=tokenizer_name or self.model_name, dp_size=torch.cuda.device_count())
+-        elif "14B" in self.model_name or "7B" in self.model_name or "8B" in self.model_name:
++        if "1.5B" in size_tag or "0.5B" in size_tag or "3B" in size_tag:
++            self.llm = sgl.Engine(model_path=self.model_name, tokenizer_path=tokenizer_name or self.model_name, dp_size=torch.cuda.device_count(), **engine_kwargs)
++        elif "14B" in size_tag or "7B" in size_tag or "8B" in size_tag:
+             if torch.cuda.device_count() == 4:
+-                self.llm = sgl.Engine(model_path=self.model_name, tokenizer_path=tokenizer_name or self.model_name, dp_size=2, tp_size=2)
++                self.llm = sgl.Engine(model_path=self.model_name, tokenizer_path=tokenizer_name or self.model_name, dp_size=2, tp_size=2, **engine_kwargs)
+             elif torch.cuda.device_count() == 2:
+                 print("Using 2 GPUs for 14B/7B model")
+-                self.llm = sgl.Engine(model_path=self.model_name, tokenizer_path=tokenizer_name or self.model_name, tp_size=2)
++                self.llm = sgl.Engine(model_path=self.model_name, tokenizer_path=tokenizer_name or self.model_name, tp_size=2, **engine_kwargs)
+             else:
+                 raise ValueError(f"Unsupported model: {self.model_name} and device count: {torch.cuda.device_count()}")
+-        elif "32B" in self.model_name or "24B" in self.model_name or "70B" in self.model_name:
+-            self.llm = sgl.Engine(model_path=self.model_name, tokenizer_path=tokenizer_name or self.model_name, tp_size=torch.cuda.device_count())
++        elif "32B" in size_tag or "24B" in size_tag or "70B" in size_tag:
++            self.llm = sgl.Engine(model_path=self.model_name, tokenizer_path=tokenizer_name or self.model_name, tp_size=torch.cuda.device_count(), **engine_kwargs)
+         else:
+             raise ValueError(f"Unsupported model: {self.model_name}")
+ 
