@@ -1,0 +1,43 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite the paper below."
+title: "Unlearnable, or Unmeasured? On the Reliability of Difficulty Labels in RLVR"
+abstract: >-
+  We revisit the unlearnability phenomenon in reinforcement learning with verifiable rewards and
+  find that the affected prompts improve at roughly one third of the learnable rate, while the
+  difficulty-defined set used to study them is much less reproducible than expected.
+authors:
+  - family-names: Chakma
+    given-names: Chandak
+    affiliation: "University of Dhaka"
+  - family-names: Sakib
+    given-names: Syed Nazmus
+    affiliation: "University of Dhaka"
+  - family-names: Haque
+    given-names: Nafiul
+    affiliation: "University of Dhaka"
+  - family-names: Arman
+    given-names: Shifat E.
+    affiliation: "University of Dhaka; University of Oxford"
+    email: shifatearman@du.ac.bd
+identifiers:
+  - type: other
+    value: "arXiv:2609.40115"
+    description: arXiv preprint
+repository-code: "https://github.com/syed-nazmus-sakib/Unlearnable-RLVR"
+url: "https://syed-nazmus-sakib.github.io/Unlearnable-RLVR/"
+license: MIT
+year: 2026
+preferred-citation:
+  type: article
+  title: "Unlearnable, or Unmeasured? On the Reliability of Difficulty Labels in RLVR"
+  authors:
+    - family-names: Chakma
+      given-names: Chandak
+    - family-names: Sakib
+      given-names: Syed Nazmus
+    - family-names: Haque
+      given-names: Nafiul
+    - family-names: Arman
+      given-names: Shifat E.
+  journal: "arXiv preprint arXiv:2609.40115"
+  year: 2026

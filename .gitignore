@@ -1,3 +1,16 @@
-._*
-.DS_Store
 __pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.DS_Store
+._*
+.venv/
+venv/
+
+# generated figure output
+figures/figures_pub/
+
+# large artifacts that are not distributed here
+*.npz
+*.parquet
+results/
+checkpoints/
