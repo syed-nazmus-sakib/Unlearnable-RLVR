@@ -1,0 +1,26 @@
+{
+  "e3arm2_union": {
+    "removed": 404,
+    "kept": 619,
+    "signal_removed_pct": 27.562600086762064,
+    "epochs_at_120_steps": 6.203554119547658
+  },
+  "e3arm3_inter": {
+    "removed": 218,
+    "kept": 805,
+    "signal_removed_pct": 4.994287940779959,
+    "epochs_at_120_steps": 4.770186335403727
+  },
+  "e3arm4_rand404": {
+    "removed": 404,
+    "kept": 619,
+    "signal_removed_pct": 39.866248109563905,
+    "epochs_at_120_steps": 6.203554119547658
+  },
+  "e3arm5_rand218": {
+    "removed": 218,
+    "kept": 805,
+    "signal_removed_pct": 21.82011896389119,
+    "epochs_at_120_steps": 4.770186335403727
+  }
+}

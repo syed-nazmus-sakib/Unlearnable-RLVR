@@ -1,0 +1,60 @@
+{
+  "seed": 20260812,
+  "n_sample": 6000,
+  "k": 12,
+  "r2_min": 30,
+  "r1_regex": "([A-Za-z_][A-Za-z0-9_]{0,15}(?:\\([^()]{0,20}\\))?)\\*(?:\\1\\*){19,}",
+  "cohorts": {
+    "trained ckpt1 (N=128)": {
+      "what": "the model the 5120 run will use",
+      "n_responses": 130944,
+      "r1_n": 0,
+      "r1_frac": 0.0,
+      "r2_n": 1742,
+      "r2_frac": 0.01330339687194526,
+      "sample": 6000,
+      "mean_s": 0.0037557044081622734,
+      "median_s": 0.0005167365015950054,
+      "p99_s": 0.05046263292431834,
+      "max_s": 0.2782267690054141,
+      "slow_1s_frac": 0.0,
+      "slow_share_of_time": 0.0,
+      "est_serial_s_per_1e5": 375.57044081622735,
+      "mean_chars": 1219.8965
+    },
+    "untrained base 0.5B (N=32)": {
+      "what": "same family, no RL -- the base-model control",
+      "n_responses": 32736,
+      "r1_n": 0,
+      "r1_frac": 0.0,
+      "r2_n": 4102,
+      "r2_frac": 0.12530547409579668,
+      "sample": 6000,
+      "mean_s": 0.011296416385855991,
+      "median_s": 0.0010297455010004342,
+      "p99_s": 0.07996885637170638,
+      "max_s": 1.5282099699834362,
+      "slow_1s_frac": 0.0003333333333333333,
+      "slow_share_of_time": 0.041549716311474146,
+      "est_serial_s_per_1e5": 1129.6416385855991,
+      "mean_chars": 1581.7693333333334
+    },
+    "Llama-3B instruct (N=32)": {
+      "what": "instruction-tuned, a second trained-model point",
+      "n_responses": 25600,
+      "r1_n": 0,
+      "r1_frac": 0.0,
+      "r2_n": 282,
+      "r2_frac": 0.011015625,
+      "sample": 6000,
+      "mean_s": 0.007853890398837392,
+      "median_s": 0.0006958135054446757,
+      "p99_s": 0.06958267240610445,
+      "max_s": 0.2985539549845271,
+      "slow_1s_frac": 0.0,
+      "slow_share_of_time": 0.0,
+      "est_serial_s_per_1e5": 785.3890398837392,
+      "mean_chars": 815.4595
+    }
+  }
+}

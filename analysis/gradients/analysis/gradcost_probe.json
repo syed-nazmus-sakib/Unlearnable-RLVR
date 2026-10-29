@@ -1,0 +1,38 @@
+{
+ "wall_s": 524.15,
+ "compute_s": 16.07,
+ "compute_share_pct": 3.065916245349614,
+ "output_gb": 3.9437677087262273,
+ "arrays": 254,
+ "rollouts": {
+  "num_rollouts": 4,
+  "num_correct": 4,
+  "num_incorrect": 0
+ },
+ "prompts_k_four": 547,
+ "prompts_k_eight": 434,
+ "subsamples": 3,
+ "evaluations": 2943,
+ "brackets": [
+  {
+   "fixed_s": 60,
+   "marginal_s": 464.15,
+   "gpu_hours": 379.44262499999996
+  },
+  {
+   "fixed_s": 20,
+   "marginal_s": 504.15,
+   "gpu_hours": 412.142625
+  },
+  {
+   "fixed_s": 0,
+   "marginal_s": 524.15,
+   "gpu_hours": 428.492625
+  }
+ ],
+ "ceiling_gpu_hours": 30,
+ "storage_tb": 11.33448082693485,
+ "free_scratch_gb": 104.86684036254883,
+ "free_project_gb": 45.826171875,
+ "streaming_hours_NOT_AN_ESTIMATE": 13.137225
+}

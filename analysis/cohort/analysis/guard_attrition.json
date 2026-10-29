@@ -1,0 +1,16 @@
+{
+  "ever_dropped": {
+    "du71": [],
+    "learnable": [],
+    "easy": [
+      4422,
+      6741
+    ]
+  },
+  "mismatched_cells": 0,
+  "rho_finv_similarity": 0.1566677613243759,
+  "p_rho": 0.33433799889417465,
+  "nat_ratio_cohortB": 2.3274185983226996,
+  "matched_K11_cohortB": 1.5393304345394017,
+  "share_log_gap_removed": 0.48938436495318366
+}

@@ -1,0 +1,75 @@
+{
+ "fig": {
+  "lo": 8,
+  "hi": 160,
+  "budgets": 153,
+  "steps": 152,
+  "falls": 125,
+  "falls_pct": 82.23684210526316,
+  "worst_step": 0.0035220041888933684,
+  "worst_step_from": 10,
+  "worst_step_to": 11,
+  "worst_pair_drop": 0.01898525664832118,
+  "worst_pair_small": 10,
+  "worst_pair_large": 19,
+  "worst_pair_small_j": 0.7416620031678133,
+  "worst_pair_large_j": 0.7226767465194921
+ },
+ "full": {
+  "lo": 8,
+  "hi": 520,
+  "budgets": 513,
+  "steps": 512,
+  "falls": 171,
+  "falls_pct": 33.3984375,
+  "worst_step": 0.004832608588793308,
+  "worst_step_from": 519,
+  "worst_step_to": 520,
+  "worst_pair_drop": 0.01898525664832118,
+  "worst_pair_small": 10,
+  "worst_pair_large": 19,
+  "worst_pair_small_j": 0.7416620031678133,
+  "worst_pair_large_j": 0.7226767465194921
+ },
+ "tol": 1e-12,
+ "last_descending_budget": 520,
+ "fall_share_beyond_fig": 12.777777777777777,
+ "table_rows": [
+  {
+   "n": 8,
+   "step_in": NaN,
+   "step_out": -0.0015052324480591128
+  },
+  {
+   "n": 16,
+   "step_in": -0.0019501308259884942,
+   "step_out": -0.0014844309189677718
+  },
+  {
+   "n": 32,
+   "step_in": -0.0009801824553397065,
+   "step_out": -0.0009953635709039066
+  },
+  {
+   "n": 64,
+   "step_in": -0.0004550388218821366,
+   "step_out": -0.0002988022207565111
+  },
+  {
+   "n": 128,
+   "step_in": -9.879066119822255e-06,
+   "step_out": 0.0001942723094680021
+  },
+  {
+   "n": 256,
+   "step_in": 0.0003251632958503059,
+   "step_out": 0.0003191308525137826
+  },
+  {
+   "n": 512,
+   "step_in": 0.0005252547968649379,
+   "step_out": 0.0005329496270309875
+  }
+ ],
+ "n_on_descent": 4
+}

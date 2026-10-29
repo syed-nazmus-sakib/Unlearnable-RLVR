@@ -1,0 +1,82 @@
+{
+  "n_prompts": 800,
+  "invalid_share": 0.252578125,
+  "feasibility_K": {
+    "bottom/middle/top 50 (main pass is 150 = 3 x 50)": [
+      8.912179631221184,
+      1.1761767059784343,
+      0.08659362367288981,
+      0.0007275773825901786
+    ],
+    "terciles of all 800": [
+      161.36568078370266,
+      124.08652845653616,
+      96.4760062691881,
+      61.45656972649558
+    ],
+    "outer 15 % (the A35.5 widening lever)": [
+      23.41665639031016,
+      4.420687382271429,
+      0.9553797691844795,
+      0.11639925738832393
+    ]
+  },
+  "corr_invalid_passrate": -0.4640145698439822,
+  "qwen_invalid_share": 0.09768297898338221,
+  "qwen_corr": -0.5130698583432098,
+  "zero_correct": 117,
+  "beta": [
+    0.5786662989117742,
+    1.1692870578469334
+  ],
+  "constructions": {
+    "bottom/middle/top 50 (main pass is 150 = 3 x 50)": {
+      "n_per_tier": 50,
+      "median": {
+        "hard": 0.0,
+        "mid": 9.0,
+        "easy": 28.0
+      },
+      "post_mean": {
+        "hard": 0.017146707914241107,
+        "mid": 0.2808664039181943,
+        "easy": 0.8734949342641566
+      },
+      "screening_span": Infinity,
+      "predicted_span": 50.94242805283223
+    },
+    "terciles of all 800": {
+      "n_per_tier": 266,
+      "median": {
+        "hard": 1.0,
+        "mid": 9.0,
+        "easy": 22.5
+      },
+      "post_mean": {
+        "hard": 0.051233988043162995,
+        "mid": 0.28683724775777014,
+        "easy": 0.6828587193345841
+      },
+      "screening_span": 22.5,
+      "predicted_span": 13.32823669239446
+    },
+    "outer 15 % (the A35.5 widening lever)": {
+      "n_per_tier": 120,
+      "median": {
+        "hard": 0.0,
+        "mid": 9.0,
+        "easy": 26.5
+      },
+      "post_mean": {
+        "hard": 0.01788749357717356,
+        "mid": 0.28333568946130255,
+        "easy": 0.8080588673717899
+      },
+      "screening_span": Infinity,
+      "predicted_span": 45.17451614366829
+    }
+  },
+  "primary": "bottom/middle/top 50 (main pass is 150 = 3 x 50)",
+  "screening_span": Infinity,
+  "predicted_span": 50.94242805283223
+}
